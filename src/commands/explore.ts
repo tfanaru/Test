@@ -23,6 +23,7 @@ import {
 interface ExploreOptions {
   limit: number;
   since?: string;
+  json?: boolean;
 }
 
 export async function explore(
@@ -34,12 +35,6 @@ export async function explore(
   const targetDir = path.relative(repoRoot, path.resolve(cwd, directory));
   const displayPath = targetDir || ".";
 
-  console.log(
-    chalk.bold.cyan(`\n  Pathfinder — exploring `) +
-      chalk.bold.white(displayPath),
-  );
-  console.log(divider());
-
   // Run file listing and git log in parallel
   const [files, logs, fileStats, authorStats] = await Promise.all([
     listFiles(targetDir || ".", { cwd: repoRoot }),
@@ -48,14 +43,83 @@ export async function explore(
     getAuthorStats(targetDir || ".", { cwd: repoRoot }),
   ]);
 
-  // --- Overview ---
-  console.log(header("Overview"));
-  console.log(labelValue("Files", formatNumber(files.length)));
-
   const languages = detectLanguages(files);
   const sortedLangs = [...languages.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
+
+  const sortedFiles = [...fileStats.entries()]
+    .sort((a, b) => b[1].commits - a[1].commits)
+    .slice(0, opts.limit);
+
+  const sortedAuthors = authorStats
+    .sort((a, b) => b.commits - a.commits)
+    .slice(0, opts.limit);
+
+  const entryPoints = await findEntryPoints(targetDir || ".", files, {
+    cwd: repoRoot,
+    limit: 5,
+  });
+
+  // --- JSON output ---
+  if (opts.json) {
+    const daysSinceLastCommit = logs.length > 0
+      ? Math.floor((Date.now() - new Date(logs[0].date).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    const result = {
+      path: displayPath,
+      overview: {
+        totalFiles: files.length,
+        languages: sortedLangs.map(([lang, count]) => ({
+          language: lang,
+          files: count,
+          percentage: Math.round((count / files.length) * 100),
+        })),
+      },
+      activity: logs.length > 0
+        ? {
+            lastCommit: logs[0].date,
+            oldestCommit: logs[logs.length - 1].date,
+            commitsAnalyzed: logs.length,
+            health: daysSinceLastCommit! < 7 ? "active"
+              : daysSinceLastCommit! < 30 ? "moderate"
+              : daysSinceLastCommit! < 90 ? "slow"
+              : "dormant",
+          }
+        : null,
+      mostChangedFiles: sortedFiles.map(([filePath, stats]) => ({
+        path: filePath,
+        commits: stats.commits,
+        authors: stats.authors.size,
+      })),
+      topContributors: sortedAuthors.map((a) => ({
+        name: a.name,
+        email: a.email,
+        commits: a.commits,
+        filesChanged: a.filesChanged.size,
+        lastActive: a.lastCommit.toISOString(),
+      })),
+      entryPoints: entryPoints.map((ep) => ({
+        file: ep.file,
+        importedBy: ep.importedBy,
+      })),
+    };
+
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  // --- Formatted output ---
+  console.log(
+    chalk.bold.cyan(`\n  Pathfinder — exploring `) +
+      chalk.bold.white(displayPath),
+  );
+  console.log(divider());
+
+  // --- Overview ---
+  console.log(header("Overview"));
+  console.log(labelValue("Files", formatNumber(files.length)));
 
   if (sortedLangs.length > 0) {
     const maxLangCount = sortedLangs[0][1];
@@ -95,10 +159,6 @@ export async function explore(
 
   // --- Most Changed Files ---
   console.log(header("Most Changed Files"));
-  const sortedFiles = [...fileStats.entries()]
-    .sort((a, b) => b[1].commits - a[1].commits)
-    .slice(0, opts.limit);
-
   if (sortedFiles.length > 0) {
     const maxCommits = sortedFiles[0][1].commits;
     for (let i = 0; i < sortedFiles.length; i++) {
@@ -115,10 +175,6 @@ export async function explore(
 
   // --- Top Contributors ---
   console.log(header("Top Contributors"));
-  const sortedAuthors = authorStats
-    .sort((a, b) => b.commits - a.commits)
-    .slice(0, opts.limit);
-
   if (sortedAuthors.length > 0) {
     const maxAuthorCommits = sortedAuthors[0].commits;
     for (let i = 0; i < sortedAuthors.length; i++) {
@@ -134,11 +190,6 @@ export async function explore(
 
   // --- Entry Points ---
   console.log(header("Likely Entry Points"));
-  const entryPoints = await findEntryPoints(targetDir || ".", files, {
-    cwd: repoRoot,
-    limit: 5,
-  });
-
   if (entryPoints.length > 0) {
     for (let i = 0; i < entryPoints.length; i++) {
       const ep = entryPoints[i];

@@ -11,6 +11,7 @@ interface TraceOptions {
   depth: number;
   direction: "up" | "down" | "both";
   filter?: string;
+  json?: boolean;
 }
 
 // Patterns for #include, import, using, require across common languages
@@ -187,6 +188,15 @@ async function buildTree(
   return node;
 }
 
+function treeToJson(node: TreeNode): object {
+  return {
+    path: node.path,
+    ...(node.children.length > 0
+      ? { children: node.children.map(treeToJson) }
+      : {}),
+  };
+}
+
 function printTree(
   node: TreeNode,
   prefix: string = "",
@@ -223,20 +233,23 @@ export async function trace(
   const repoRoot = await getRepoRoot(cwd);
   const relativePath = path.relative(repoRoot, path.resolve(cwd, target));
 
-  console.log(
-    chalk.bold.cyan(`\n  Pathfinder — tracing `) +
-      chalk.bold.white(relativePath),
-  );
-  console.log(divider());
-
   const allFiles = await listFiles(".", { cwd: repoRoot });
   const allFilesSet = new Set(allFiles);
 
   if (!allFilesSet.has(relativePath)) {
-    console.log(chalk.red(`  File not found in repo: ${relativePath}`));
-    console.log(
-      chalk.dim("  Make sure you're pointing at a tracked file."),
-    );
+    if (opts.json) {
+      console.log(JSON.stringify({ error: `File not found in repo: ${relativePath}` }, null, 2));
+    } else {
+      console.log(
+        chalk.bold.cyan(`\n  Pathfinder — tracing `) +
+          chalk.bold.white(relativePath),
+      );
+      console.log(divider());
+      console.log(chalk.red(`  File not found in repo: ${relativePath}`));
+      console.log(
+        chalk.dim("  Make sure you're pointing at a tracked file."),
+      );
+    }
     return;
   }
 
@@ -244,6 +257,40 @@ export async function trace(
     opts.direction === "both"
       ? ["down", "up"]
       : [opts.direction];
+
+  // --- JSON output ---
+  if (opts.json) {
+    const result: Record<string, unknown> = {
+      file: relativePath,
+      depth: opts.depth,
+      direction: opts.direction,
+    };
+
+    if (opts.filter) result.filter = opts.filter;
+
+    for (const dir of directions) {
+      const tree = await buildTree(
+        relativePath,
+        allFilesSet,
+        dir,
+        opts.depth,
+        repoRoot,
+        opts.filter,
+      );
+      const key = dir === "down" ? "dependencies" : "dependents";
+      result[key] = tree.children.map(treeToJson);
+    }
+
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  // --- Formatted output ---
+  console.log(
+    chalk.bold.cyan(`\n  Pathfinder — tracing `) +
+      chalk.bold.white(relativePath),
+  );
+  console.log(divider());
 
   for (const dir of directions) {
     const label = dir === "down" ? "Dependencies (what this file uses)" : "Dependents (what uses this file)";

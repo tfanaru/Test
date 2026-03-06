@@ -39,7 +39,9 @@ export function listItem(
  * Format a bar chart inline.
  */
 export function bar(value: number, max: number, width: number = 20): string {
-  const filled = Math.round((value / max) * width);
+  if (max <= 0 || width <= 0) return chalk.dim("░".repeat(Math.max(width, 0)));
+  const ratio = Math.max(0, Math.min(1, value / max));
+  const filled = Math.round(ratio * width);
   return chalk.cyan("█".repeat(filled)) + chalk.dim("░".repeat(width - filled));
 }
 
@@ -51,6 +53,7 @@ export function relativeTime(date: Date): string {
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
+  if (diffDays < 0) return "in the future";
   if (diffDays === 0) return "today";
   if (diffDays === 1) return "yesterday";
   if (diffDays < 30) return `${diffDays} days ago`;

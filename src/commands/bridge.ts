@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 
 interface BridgeOptions {
   depth: number;
+  json?: boolean;
 }
 
 // Reuse the import extraction logic from trace
@@ -166,14 +167,6 @@ export async function bridge(
   const relA = path.relative(repoRoot, path.resolve(cwd, pathA));
   const relB = path.relative(repoRoot, path.resolve(cwd, pathB));
 
-  console.log(
-    chalk.bold.cyan(`\n  Pathfinder — bridging `) +
-      chalk.bold.white(relA) +
-      chalk.bold.cyan(` ↔ `) +
-      chalk.bold.white(relB),
-  );
-  console.log(divider());
-
   const allFiles = await listFiles(".", { cwd: repoRoot });
   const allFilesSet = new Set(allFiles);
 
@@ -186,26 +179,41 @@ export async function bridge(
   );
 
   if (filesA.length === 0) {
-    console.log(chalk.red(`  No files found under: ${relA}`));
+    if (opts.json) {
+      console.log(JSON.stringify({ error: `No files found under: ${relA}` }, null, 2));
+    } else {
+      console.log(
+        chalk.bold.cyan(`\n  Pathfinder — bridging `) +
+          chalk.bold.white(relA) +
+          chalk.bold.cyan(` ↔ `) +
+          chalk.bold.white(relB),
+      );
+      console.log(divider());
+      console.log(chalk.red(`  No files found under: ${relA}`));
+    }
     return;
   }
   if (filesB.length === 0) {
-    console.log(chalk.red(`  No files found under: ${relB}`));
+    if (opts.json) {
+      console.log(JSON.stringify({ error: `No files found under: ${relB}` }, null, 2));
+    } else {
+      console.log(
+        chalk.bold.cyan(`\n  Pathfinder — bridging `) +
+          chalk.bold.white(relA) +
+          chalk.bold.cyan(` ↔ `) +
+          chalk.bold.white(relB),
+      );
+      console.log(divider());
+      console.log(chalk.red(`  No files found under: ${relB}`));
+    }
     return;
   }
-
-  console.log(
-    chalk.dim(
-      `  Scanning ${filesA.length} files in ${relA} and ${filesB.length} files in ${relB}...`,
-    ),
-  );
 
   // Build a graph of the files in scope (both dirs + their immediate dependencies)
   const scopeFiles = [...new Set([...filesA, ...filesB])];
   const graph = await buildLocalGraph(scopeFiles, allFilesSet, repoRoot);
 
   // Also add reverse edges into the graph for files that import scope files
-  // (look for files that bridge the two directories)
   const allScopeImports = new Set<string>();
   for (const [, targets] of graph) {
     for (const t of targets) {
@@ -227,6 +235,43 @@ export async function bridge(
   // BFS from A to B
   const targetSet = new Set(filesB);
   const bridgePath = bfs(graph, filesA, targetSet, opts.depth);
+
+  // --- JSON output ---
+  if (opts.json) {
+    const result: Record<string, unknown> = {
+      from: relA,
+      to: relB,
+      depth: opts.depth,
+      filesScanned: { from: filesA.length, to: filesB.length },
+    };
+
+    if (bridgePath) {
+      result.connection = {
+        path: bridgePath,
+        hops: bridgePath.length - 1,
+      };
+    } else {
+      result.connection = null;
+    }
+
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  // --- Formatted output ---
+  console.log(
+    chalk.bold.cyan(`\n  Pathfinder — bridging `) +
+      chalk.bold.white(relA) +
+      chalk.bold.cyan(` ↔ `) +
+      chalk.bold.white(relB),
+  );
+  console.log(divider());
+
+  console.log(
+    chalk.dim(
+      `  Scanning ${filesA.length} files in ${relA} and ${filesB.length} files in ${relB}...`,
+    ),
+  );
 
   console.log(header("Connection Path"));
 

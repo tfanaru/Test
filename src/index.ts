@@ -33,6 +33,23 @@ async function requireGitRepo(): Promise<void> {
   }
 }
 
+function parsePositiveInt(value: string, name: string): number {
+  const n = parseInt(value, 10);
+  if (isNaN(n) || n < 1) {
+    console.error(chalk.red(`\n  Error: --${name} must be a positive integer, got "${value}"\n`));
+    process.exit(1);
+  }
+  return n;
+}
+
+function validateDirection(dir: string): "up" | "down" | "both" {
+  if (dir !== "up" && dir !== "down" && dir !== "both") {
+    console.error(chalk.red(`\n  Error: --direction must be "up", "down", or "both", got "${dir}"\n`));
+    process.exit(1);
+  }
+  return dir;
+}
+
 // --- explore ---
 program
   .command("explore <directory>")
@@ -41,11 +58,13 @@ program
   )
   .option("-n, --limit <number>", "Number of items to show per section", "10")
   .option("--since <date>", "Only consider commits since this date (e.g. '6 months ago')")
-  .action(async (directory: string, opts: { limit: string; since?: string }) => {
+  .option("--json", "Output results as JSON")
+  .action(async (directory: string, opts: { limit: string; since?: string; json?: boolean }) => {
     await requireGitRepo();
     await explore(directory, {
-      limit: parseInt(opts.limit, 10),
+      limit: parsePositiveInt(opts.limit, "limit"),
       since: opts.since,
+      json: opts.json ?? false,
     });
   });
 
@@ -57,11 +76,13 @@ program
   )
   .option("-n, --limit <number>", "Number of experts to show", "10")
   .option("--since <date>", "Only consider commits since this date")
-  .action(async (targetPath: string, opts: { limit: string; since?: string }) => {
+  .option("--json", "Output results as JSON")
+  .action(async (targetPath: string, opts: { limit: string; since?: string; json?: boolean }) => {
     await requireGitRepo();
     await who(targetPath, {
-      limit: parseInt(opts.limit, 10),
+      limit: parsePositiveInt(opts.limit, "limit"),
       since: opts.since,
+      json: opts.json ?? false,
     });
   });
 
@@ -78,16 +99,18 @@ program
     "both",
   )
   .option("--filter <pattern>", "Only show dependencies matching this pattern")
+  .option("--json", "Output results as JSON")
   .action(
     async (
       file: string,
-      opts: { depth: string; direction: string; filter?: string },
+      opts: { depth: string; direction: string; filter?: string; json?: boolean },
     ) => {
       await requireGitRepo();
       await trace(file, {
-        depth: parseInt(opts.depth, 10),
-        direction: opts.direction as "up" | "down" | "both",
+        depth: parsePositiveInt(opts.depth, "depth"),
+        direction: validateDirection(opts.direction),
         filter: opts.filter,
+        json: opts.json ?? false,
       });
     },
   );
@@ -99,10 +122,12 @@ program
     "Find how two parts of the codebase connect to each other",
   )
   .option("-d, --depth <number>", "Max search depth for connections", "5")
-  .action(async (pathA: string, pathB: string, opts: { depth: string }) => {
+  .option("--json", "Output results as JSON")
+  .action(async (pathA: string, pathB: string, opts: { depth: string; json?: boolean }) => {
     await requireGitRepo();
     await bridge(pathA, pathB, {
-      depth: parseInt(opts.depth, 10),
+      depth: parsePositiveInt(opts.depth, "depth"),
+      json: opts.json ?? false,
     });
   });
 

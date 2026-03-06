@@ -17,6 +17,7 @@ import {
 interface WhoOptions {
   limit: number;
   since?: string;
+  json?: boolean;
 }
 
 interface ScoredAuthor {
@@ -91,18 +92,21 @@ export async function who(
   const relativePath = path.relative(repoRoot, path.resolve(cwd, targetPath));
   const displayPath = relativePath || ".";
 
-  console.log(
-    chalk.bold.cyan(`\n  Pathfinder — who knows `) +
-      chalk.bold.white(displayPath) +
-      chalk.bold.cyan(` best?`),
-  );
-  console.log(divider());
-
   const authorStats = await getAuthorStats(relativePath || ".", { cwd: repoRoot });
 
   if (authorStats.length === 0) {
-    console.log(chalk.dim("  No commit history found for this path."));
-    console.log("");
+    if (opts.json) {
+      console.log(JSON.stringify({ path: displayPath, experts: [], summary: { totalContributors: 0, activeInLast90Days: 0 } }, null, 2));
+    } else {
+      console.log(
+        chalk.bold.cyan(`\n  Pathfinder — who knows `) +
+          chalk.bold.white(displayPath) +
+          chalk.bold.cyan(` best?`),
+      );
+      console.log(divider());
+      console.log(chalk.dim("  No commit history found for this path."));
+      console.log("");
+    }
     return;
   }
 
@@ -113,6 +117,48 @@ export async function who(
     .map((a) => scoreAuthor(a, maxCommits, maxFiles))
     .sort((a, b) => b.score - a.score)
     .slice(0, opts.limit);
+
+  const activeRecently = authorStats.filter((a) => {
+    const days =
+      (Date.now() - a.lastCommit.getTime()) / (1000 * 60 * 60 * 24);
+    return days < 90;
+  });
+
+  // --- JSON output ---
+  if (opts.json) {
+    const result = {
+      path: displayPath,
+      experts: scored.map(({ stats, score, breakdown }) => ({
+        name: stats.name,
+        email: stats.email,
+        score: Math.round(score * 1000) / 1000,
+        breakdown: {
+          recency: Math.round(breakdown.recency * 100),
+          volume: Math.round(breakdown.volume * 100),
+          breadth: Math.round(breakdown.breadth * 100),
+        },
+        commits: stats.commits,
+        filesChanged: stats.filesChanged.size,
+        firstCommit: stats.firstCommit.toISOString(),
+        lastCommit: stats.lastCommit.toISOString(),
+        tenure: describeTenure(stats),
+      })),
+      summary: {
+        totalContributors: authorStats.length,
+        activeInLast90Days: activeRecently.length,
+      },
+    };
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  // --- Formatted output ---
+  console.log(
+    chalk.bold.cyan(`\n  Pathfinder — who knows `) +
+      chalk.bold.white(displayPath) +
+      chalk.bold.cyan(` best?`),
+  );
+  console.log(divider());
 
   console.log(header("Expertise Ranking"));
   console.log("");
@@ -146,13 +192,6 @@ export async function who(
     }
     console.log("");
   }
-
-  // Quick summary
-  const activeRecently = authorStats.filter((a) => {
-    const days =
-      (Date.now() - a.lastCommit.getTime()) / (1000 * 60 * 60 * 24);
-    return days < 90;
-  });
 
   console.log(divider());
   console.log(
