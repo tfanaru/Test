@@ -38,6 +38,51 @@ async function git(args: string[], cwd?: string) {
   return execFileAsync("git", args, { cwd, maxBuffer: MAX_BUFFER });
 }
 
+export function parseNumstat(output: string): ReviewFileStats[] {
+  const stats: ReviewFileStats[] = [];
+  for (const line of output.trim().split("\n")) {
+    const match = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
+    if (match) {
+      stats.push({
+        path: match[3],
+        additions: match[1] === "-" ? 0 : parseInt(match[1], 10),
+        deletions: match[2] === "-" ? 0 : parseInt(match[2], 10),
+      });
+    }
+  }
+  return stats;
+}
+
+export function groupByDirectory(
+  files: ReviewFileStats[],
+): Map<string, { files: number; additions: number; deletions: number }> {
+  const dirMap = new Map<string, { files: number; additions: number; deletions: number }>();
+  for (const f of files) {
+    const dir = path.dirname(f.path) || ".";
+    const topDir = dir.split("/").slice(0, 2).join("/");
+    const existing = dirMap.get(topDir);
+    if (existing) {
+      existing.files++;
+      existing.additions += f.additions;
+      existing.deletions += f.deletions;
+    } else {
+      dirMap.set(topDir, {
+        files: 1,
+        additions: f.additions,
+        deletions: f.deletions,
+      });
+    }
+  }
+  return dirMap;
+}
+
+export function assessBlastRadius(fileStats: ReviewFileStats[]): string {
+  const uniqueDirs = new Set(fileStats.map((f) => path.dirname(f.path)));
+  if (uniqueDirs.size > 10 || fileStats.length > 50) return "high";
+  if (uniqueDirs.size > 3 || fileStats.length > 15) return "medium";
+  return "low";
+}
+
 export async function review(
   commitRange: string,
   opts: ReviewOptions,
@@ -89,19 +134,7 @@ export async function review(
     diffStdout = "";
   }
 
-  const fileStats: ReviewFileStats[] = [];
-  if (diffStdout.trim()) {
-    for (const line of diffStdout.trim().split("\n")) {
-      const match = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
-      if (match) {
-        fileStats.push({
-          path: match[3],
-          additions: match[1] === "-" ? 0 : parseInt(match[1], 10),
-          deletions: match[2] === "-" ? 0 : parseInt(match[2], 10),
-        });
-      }
-    }
-  }
+  const fileStats = parseNumstat(diffStdout);
 
   // Get per-author stats from the commits
   const authorMap = new Map<string, ReviewAuthorStats>();
@@ -160,23 +193,7 @@ export async function review(
 
   // --- Directories affected ---
   console.log(header("Areas Affected"));
-  const dirMap = new Map<string, { files: number; additions: number; deletions: number }>();
-  for (const f of fileStats) {
-    const dir = path.dirname(f.path) || ".";
-    const topDir = dir.split("/").slice(0, 2).join("/");
-    const existing = dirMap.get(topDir);
-    if (existing) {
-      existing.files++;
-      existing.additions += f.additions;
-      existing.deletions += f.deletions;
-    } else {
-      dirMap.set(topDir, {
-        files: 1,
-        additions: f.additions,
-        deletions: f.deletions,
-      });
-    }
-  }
+  const dirMap = groupByDirectory(fileStats);
 
   const sortedDirs = [...dirMap.entries()]
     .sort((a, b) => b[1].files - a[1].files)
@@ -239,10 +256,11 @@ export async function review(
   // Blast radius assessment
   console.log(header("Blast Radius"));
   const uniqueDirs = new Set(fileStats.map((f) => path.dirname(f.path)));
+  const blastLevel = assessBlastRadius(fileStats);
   let risk: string;
-  if (uniqueDirs.size > 10 || fileStats.length > 50) {
+  if (blastLevel === "high") {
     risk = chalk.red("● High — changes span many directories and files");
-  } else if (uniqueDirs.size > 3 || fileStats.length > 15) {
+  } else if (blastLevel === "medium") {
     risk = chalk.yellow("● Medium — changes touch several areas");
   } else {
     risk = chalk.green("● Low — changes are well-scoped");

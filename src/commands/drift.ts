@@ -30,7 +30,7 @@ interface PeriodStats {
 /**
  * Bucket log entries into equal time periods for activity analysis.
  */
-function bucketByPeriod(
+export function bucketByPeriod(
   logs: LogEntry[],
   periods: number,
 ): PeriodStats[] {
@@ -89,7 +89,7 @@ function bucketByPeriod(
 /**
  * Detect major changes — commits that touch many lines.
  */
-function findMajorCommits(logs: LogEntry[]): LogEntry[] {
+export function findMajorCommits(logs: LogEntry[]): LogEntry[] {
   // Heuristic: commits with keywords that suggest big changes
   const keywords = [
     /refactor/i,

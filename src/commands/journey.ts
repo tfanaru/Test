@@ -29,7 +29,7 @@ interface OwnershipPeriod {
  * Group sequential commits by the same author into "ownership periods".
  * Logs should be in reverse chronological order (newest first).
  */
-function buildOwnershipTimeline(logs: LogEntry[]): OwnershipPeriod[] {
+export function buildOwnershipTimeline(logs: LogEntry[]): OwnershipPeriod[] {
   if (logs.length === 0) return [];
 
   // Work from oldest to newest
@@ -66,7 +66,7 @@ function buildOwnershipTimeline(logs: LogEntry[]): OwnershipPeriod[] {
 /**
  * Identify milestone commits — first commit, large message changes, etc.
  */
-function findMilestones(
+export function findMilestones(
   logs: LogEntry[],
   limit: number,
 ): { log: LogEntry; reason: string }[] {

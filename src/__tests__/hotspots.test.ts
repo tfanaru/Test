@@ -1,37 +1,6 @@
 import { describe, it, expect } from "vitest";
-
-/**
- * Unit tests for hotspots command internals.
- */
-
-function scoreHotspot(commits: number, authors: number): number {
-  return Math.sqrt(commits * authors);
-}
-
-function riskLevel(score: number, maxScore: number): string {
-  const ratio = score / maxScore;
-  if (ratio > 0.7) return "high";
-  if (ratio > 0.4) return "medium";
-  return "low";
-}
-
-interface Hotspot {
-  path: string;
-  commits: number;
-  authors: number;
-  score: number;
-}
-
-function rankHotspots(
-  files: { path: string; commits: number; authors: number }[],
-): Hotspot[] {
-  return files
-    .map((f) => ({
-      ...f,
-      score: scoreHotspot(f.commits, f.authors),
-    }))
-    .sort((a, b) => b.score - a.score);
-}
+import { scoreHotspot, riskLabel } from "../commands/hotspots.js";
+import chalk from "chalk";
 
 describe("scoreHotspot", () => {
   it("returns 0 when commits is 0", () => {
@@ -64,66 +33,31 @@ describe("scoreHotspot", () => {
   });
 });
 
-describe("riskLevel", () => {
-  it("returns high for scores > 70% of max", () => {
-    expect(riskLevel(8, 10)).toBe("high");
-    expect(riskLevel(10, 10)).toBe("high");
+describe("riskLabel", () => {
+  it("returns High for scores > 70% of max", () => {
+    expect(riskLabel(8, 10)).toContain("High");
+    expect(riskLabel(10, 10)).toContain("High");
   });
 
-  it("returns medium for scores between 40-70% of max", () => {
-    expect(riskLevel(5, 10)).toBe("medium");
-    expect(riskLevel(6, 10)).toBe("medium");
+  it("returns Medium for scores between 40-70% of max", () => {
+    expect(riskLabel(5, 10)).toContain("Medium");
+    expect(riskLabel(6, 10)).toContain("Medium");
   });
 
-  it("returns low for scores <= 40% of max", () => {
-    expect(riskLevel(3, 10)).toBe("low");
-    expect(riskLevel(1, 10)).toBe("low");
+  it("returns Low for scores <= 40% of max", () => {
+    expect(riskLabel(3, 10)).toContain("Low");
+    expect(riskLabel(1, 10)).toContain("Low");
   });
 
   it("handles edge cases at boundaries", () => {
-    expect(riskLevel(7.1, 10)).toBe("high");
-    expect(riskLevel(7, 10)).toBe("medium");
-    expect(riskLevel(4, 10)).toBe("low");
-  });
-});
-
-describe("rankHotspots", () => {
-  it("returns empty for empty input", () => {
-    expect(rankHotspots([])).toEqual([]);
+    expect(riskLabel(7.1, 10)).toContain("High");
+    expect(riskLabel(7, 10)).toContain("Medium");
+    expect(riskLabel(4, 10)).toContain("Low");
   });
 
-  it("ranks files by hotspot score descending", () => {
-    const files = [
-      { path: "a.ts", commits: 2, authors: 1 },
-      { path: "b.ts", commits: 10, authors: 5 },
-      { path: "c.ts", commits: 5, authors: 3 },
-    ];
-    const result = rankHotspots(files);
-    expect(result[0].path).toBe("b.ts");
-    expect(result[1].path).toBe("c.ts");
-    expect(result[2].path).toBe("a.ts");
-  });
-
-  it("includes score in results", () => {
-    const files = [{ path: "a.ts", commits: 4, authors: 9 }];
-    const result = rankHotspots(files);
-    expect(result[0].score).toBe(6);
-  });
-
-  it("handles single file", () => {
-    const files = [{ path: "a.ts", commits: 3, authors: 2 }];
-    const result = rankHotspots(files);
-    expect(result).toHaveLength(1);
-    expect(result[0].path).toBe("a.ts");
-  });
-
-  it("handles files with equal scores", () => {
-    const files = [
-      { path: "a.ts", commits: 4, authors: 4 },
-      { path: "b.ts", commits: 4, authors: 4 },
-    ];
-    const result = rankHotspots(files);
-    expect(result).toHaveLength(2);
-    expect(result[0].score).toBe(result[1].score);
+  it("returns a string with chalk formatting", () => {
+    const result = riskLabel(10, 10);
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
   });
 });

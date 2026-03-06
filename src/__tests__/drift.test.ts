@@ -1,93 +1,6 @@
 import { describe, it, expect } from "vitest";
-
-/**
- * Unit tests for drift command internals.
- * We test the bucketing and major commit detection logic.
- */
-
-// Re-implement the internal functions for testability
-// (The actual command uses these internally)
-
-interface LogEntry {
-  hash: string;
-  author: string;
-  email: string;
-  date: string;
-  subject: string;
-}
-
-interface PeriodStats {
-  label: string;
-  commits: number;
-  authors: Set<string>;
-  start: Date;
-  end: Date;
-}
-
-function bucketByPeriod(logs: LogEntry[], periods: number): PeriodStats[] {
-  if (logs.length === 0) return [];
-
-  const dates = logs.map((l) => new Date(l.date).getTime());
-  const earliest = Math.min(...dates);
-  const latest = Math.max(...dates);
-  const span = latest - earliest;
-
-  if (span === 0) {
-    const authors = new Set(logs.map((l) => l.author));
-    return [
-      {
-        label: "all",
-        commits: logs.length,
-        authors,
-        start: new Date(earliest),
-        end: new Date(latest),
-      },
-    ];
-  }
-
-  const bucketSize = span / periods;
-  const buckets: PeriodStats[] = [];
-
-  for (let i = 0; i < periods; i++) {
-    const start = new Date(earliest + i * bucketSize);
-    const end = new Date(earliest + (i + 1) * bucketSize);
-    buckets.push({
-      label: "",
-      commits: 0,
-      authors: new Set(),
-      start,
-      end,
-    });
-  }
-
-  for (const log of logs) {
-    const t = new Date(log.date).getTime();
-    let idx = Math.floor((t - earliest) / bucketSize);
-    if (idx >= periods) idx = periods - 1;
-    buckets[idx].commits++;
-    buckets[idx].authors.add(log.author);
-  }
-
-  return buckets;
-}
-
-function findMajorCommits(logs: LogEntry[]): LogEntry[] {
-  const keywords = [
-    /refactor/i,
-    /rewrite/i,
-    /overhaul/i,
-    /redesign/i,
-    /migration/i,
-    /breaking/i,
-    /major/i,
-    /rework/i,
-    /restructur/i,
-  ];
-
-  return logs.filter((log) =>
-    keywords.some((kw) => kw.test(log.subject)),
-  );
-}
+import { bucketByPeriod, findMajorCommits } from "../commands/drift.js";
+import type { LogEntry } from "../utils/git.js";
 
 function makeLog(subject: string, author: string, date: string): LogEntry {
   return {
@@ -120,7 +33,6 @@ describe("bucketByPeriod", () => {
     ];
     const result = bucketByPeriod(logs, 3);
     expect(result).toHaveLength(3);
-    // Total commits should sum to 3
     const totalCommits = result.reduce((s, p) => s + p.commits, 0);
     expect(totalCommits).toBe(3);
   });
@@ -151,7 +63,6 @@ describe("bucketByPeriod", () => {
       makeLog("change 1", "Alice", "2024-01-15T10:00:00Z"),
       makeLog("change 2", "Bob", "2024-06-15T10:00:00Z"),
     ];
-    // Requesting 6 periods but only 2 commits over 2 dates
     const result = bucketByPeriod(logs, 6);
     expect(result).toHaveLength(6);
     const totalCommits = result.reduce((s, p) => s + p.commits, 0);

@@ -29,12 +29,12 @@ interface Hotspot {
  * Score a file's "hotspot" risk.
  * Files that are frequently changed by many authors are likely to contain bugs.
  */
-function scoreHotspot(commits: number, authors: number): number {
+export function scoreHotspot(commits: number, authors: number): number {
   // Geometric mean of commits and authors — rewards both dimensions
   return Math.sqrt(commits * authors);
 }
 
-function riskLabel(score: number, maxScore: number): string {
+export function riskLabel(score: number, maxScore: number): string {
   const ratio = score / maxScore;
   if (ratio > 0.7) return chalk.red("● High");
   if (ratio > 0.4) return chalk.yellow("● Medium");

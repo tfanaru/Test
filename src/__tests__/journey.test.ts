@@ -1,103 +1,6 @@
 import { describe, it, expect } from "vitest";
-
-/**
- * Unit tests for journey command internals.
- */
-
-interface LogEntry {
-  hash: string;
-  author: string;
-  email: string;
-  date: string;
-  subject: string;
-}
-
-interface OwnershipPeriod {
-  author: string;
-  startDate: Date;
-  endDate: Date;
-  commits: number;
-}
-
-function buildOwnershipTimeline(logs: LogEntry[]): OwnershipPeriod[] {
-  if (logs.length === 0) return [];
-
-  const chronological = [...logs].reverse();
-  const periods: OwnershipPeriod[] = [];
-
-  let current: OwnershipPeriod = {
-    author: chronological[0].author,
-    startDate: new Date(chronological[0].date),
-    endDate: new Date(chronological[0].date),
-    commits: 1,
-  };
-
-  for (let i = 1; i < chronological.length; i++) {
-    const log = chronological[i];
-    if (log.author === current.author) {
-      current.endDate = new Date(log.date);
-      current.commits++;
-    } else {
-      periods.push(current);
-      current = {
-        author: log.author,
-        startDate: new Date(log.date),
-        endDate: new Date(log.date),
-        commits: 1,
-      };
-    }
-  }
-  periods.push(current);
-
-  return periods;
-}
-
-function findMilestones(
-  logs: LogEntry[],
-  limit: number,
-): { log: LogEntry; reason: string }[] {
-  if (logs.length === 0) return [];
-
-  const milestones: { log: LogEntry; reason: string }[] = [];
-  const oldest = logs[logs.length - 1];
-  milestones.push({ log: oldest, reason: "Created" });
-
-  const milestoneKeywords = [
-    { pattern: /refactor/i, label: "Refactored" },
-    { pattern: /rewrite/i, label: "Rewritten" },
-    { pattern: /fix|bug/i, label: "Bug fix" },
-    { pattern: /feat|feature|add/i, label: "Feature added" },
-    { pattern: /breaking/i, label: "Breaking change" },
-    { pattern: /migrat/i, label: "Migration" },
-    { pattern: /deprecat/i, label: "Deprecation" },
-    { pattern: /rename/i, label: "Renamed" },
-    { pattern: /move/i, label: "Moved" },
-    { pattern: /test/i, label: "Tests added" },
-  ];
-
-  for (const log of logs) {
-    if (log === oldest) continue;
-    for (const { pattern, label } of milestoneKeywords) {
-      if (pattern.test(log.subject)) {
-        milestones.push({ log, reason: label });
-        break;
-      }
-    }
-  }
-
-  if (logs.length > 1) {
-    const newest = logs[0];
-    const alreadyIncluded = milestones.some((m) => m.log.hash === newest.hash);
-    if (!alreadyIncluded) {
-      milestones.push({ log: newest, reason: "Latest change" });
-    }
-  }
-
-  milestones.sort(
-    (a, b) => new Date(a.log.date).getTime() - new Date(b.log.date).getTime(),
-  );
-  return milestones.slice(0, limit);
-}
+import { buildOwnershipTimeline, findMilestones } from "../commands/journey.js";
+import type { LogEntry } from "../utils/git.js";
 
 function makeLog(hash: string, subject: string, author: string, date: string): LogEntry {
   return { hash, author, email: `${author.toLowerCase()}@test.com`, date, subject };
@@ -225,7 +128,6 @@ describe("findMilestones", () => {
       makeLog("c1", "initial", "Alice", "2024-01-01T10:00:00Z"),
     ];
     const result = findMilestones(logs, 10);
-    // c2 is detected as "Refactored", should not also appear as "Latest change"
     const latestEntries = result.filter((m) => m.reason === "Latest change");
     expect(latestEntries).toHaveLength(0);
   });
