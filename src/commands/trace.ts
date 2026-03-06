@@ -38,7 +38,7 @@ const IMPORT_PATTERNS: { ext: RegExp; pattern: RegExp }[] = [
 /**
  * Extract raw import strings from a file's content.
  */
-function extractImports(filePath: string, content: string): string[] {
+export function extractImports(filePath: string, content: string): string[] {
   const imports: string[] = [];
   for (const { ext, pattern } of IMPORT_PATTERNS) {
     if (!ext.test(filePath)) continue;
@@ -57,7 +57,7 @@ function extractImports(filePath: string, content: string): string[] {
 /**
  * Resolve an import string to a file path in the repo if possible.
  */
-function resolveImport(
+export function resolveImport(
   importStr: string,
   sourceFile: string,
   allFiles: Set<string>,

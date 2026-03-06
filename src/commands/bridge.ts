@@ -102,7 +102,7 @@ async function buildLocalGraph(
 /**
  * BFS to find shortest path between two sets of files.
  */
-function bfs(
+export function bfs(
   graph: Map<string, Set<string>>,
   startFiles: string[],
   targetFiles: Set<string>,

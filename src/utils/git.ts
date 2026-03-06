@@ -122,32 +122,34 @@ export async function getFileChangeStats(
 
   const stats = new Map<string, FileChangeStats>();
 
-  // Output is blocks separated by blank lines:
-  // hash|author|date\nfile1\nfile2\n\nhash|author|date\n...
-  const blocks = stdout.trim().split("\n\n");
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    if (lines.length === 0) continue;
+  // Parse line-by-line. Header lines contain "|" separators (hash|author|date).
+  // File lines follow and are plain paths. Blank lines separate sections.
+  const lines = stdout.trim().split("\n");
+  let currentAuthor = "";
+  let currentDate = new Date();
 
-    const headerParts = lines[0].split("|");
-    if (headerParts.length < 3) continue;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
 
-    const [, author, dateStr] = headerParts;
-    const date = new Date(dateStr);
-    const files = lines.slice(1).filter((f) => f.trim());
-
-    for (const file of files) {
-      const existing = stats.get(file);
+    const parts = trimmed.split("|");
+    if (parts.length >= 3 && parts[2].includes("T")) {
+      // This is a header line: hash|author|date
+      currentAuthor = parts[1];
+      currentDate = new Date(parts[2]);
+    } else {
+      // This is a file path
+      const existing = stats.get(trimmed);
       if (existing) {
         existing.commits++;
-        existing.authors.add(author);
-        if (date > existing.lastModified) existing.lastModified = date;
+        existing.authors.add(currentAuthor);
+        if (currentDate > existing.lastModified) existing.lastModified = currentDate;
       } else {
-        stats.set(file, {
-          path: file,
+        stats.set(trimmed, {
+          path: trimmed,
           commits: 1,
-          lastModified: date,
-          authors: new Set([author]),
+          lastModified: currentDate,
+          authors: new Set([currentAuthor]),
         });
       }
     }
@@ -181,36 +183,48 @@ export async function getAuthorStats(
   if (!stdout.trim()) return [];
 
   const authorMap = new Map<string, AuthorStats>();
-  const blocks = stdout.trim().split("\n\n");
 
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    if (lines.length === 0) continue;
+  // Parse line-by-line. Header lines: name|email|date. File lines: plain paths.
+  const lines = stdout.trim().split("\n");
+  let currentName = "";
+  let currentEmail = "";
+  let currentDate = new Date();
 
-    const headerParts = lines[0].split("|");
-    if (headerParts.length < 3) continue;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
 
-    const [name, email, dateStr] = headerParts;
-    const date = new Date(dateStr);
-    const files = lines.slice(1).filter((f) => f.trim());
+    const parts = trimmed.split("|");
+    if (parts.length >= 3 && parts[2].includes("T")) {
+      // Header line: name|email|date
+      currentName = parts[0];
+      currentEmail = parts[1];
+      currentDate = new Date(parts[2]);
 
-    const key = email.toLowerCase();
-    const existing = authorMap.get(key);
-
-    if (existing) {
-      existing.commits++;
-      for (const f of files) existing.filesChanged.add(f);
-      if (date < existing.firstCommit) existing.firstCommit = date;
-      if (date > existing.lastCommit) existing.lastCommit = date;
+      // Register the commit even if no files follow
+      const key = currentEmail.toLowerCase();
+      const existing = authorMap.get(key);
+      if (existing) {
+        existing.commits++;
+        if (currentDate < existing.firstCommit) existing.firstCommit = currentDate;
+        if (currentDate > existing.lastCommit) existing.lastCommit = currentDate;
+      } else {
+        authorMap.set(key, {
+          name: currentName,
+          email: currentEmail,
+          commits: 1,
+          filesChanged: new Set(),
+          firstCommit: currentDate,
+          lastCommit: currentDate,
+        });
+      }
     } else {
-      authorMap.set(key, {
-        name,
-        email,
-        commits: 1,
-        filesChanged: new Set(files),
-        firstCommit: date,
-        lastCommit: date,
-      });
+      // File path line — add to current author's files
+      const key = currentEmail.toLowerCase();
+      const existing = authorMap.get(key);
+      if (existing) {
+        existing.filesChanged.add(trimmed);
+      }
     }
   }
 
