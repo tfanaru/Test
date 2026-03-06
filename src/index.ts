@@ -7,6 +7,10 @@ import { explore } from "./commands/explore.js";
 import { who } from "./commands/who.js";
 import { trace } from "./commands/trace.js";
 import { bridge } from "./commands/bridge.js";
+import { drift } from "./commands/drift.js";
+import { hotspots } from "./commands/hotspots.js";
+import { review } from "./commands/review.js";
+import { journey } from "./commands/journey.js";
 
 const program = new Command();
 
@@ -103,6 +107,68 @@ program
     await requireGitRepo();
     await bridge(pathA, pathB, {
       depth: parseInt(opts.depth, 10),
+    });
+  });
+
+// --- drift ---
+program
+  .command("drift <file>")
+  .description(
+    "Show how a file or directory has evolved over time (churn, stability, trends)",
+  )
+  .option("--since <date>", "Only consider commits since this date")
+  .option("-p, --periods <number>", "Number of time periods to analyze", "6")
+  .action(async (file: string, opts: { since?: string; periods: string }) => {
+    await requireGitRepo();
+    await drift(file, {
+      since: opts.since,
+      periods: parseInt(opts.periods, 10),
+    });
+  });
+
+// --- hotspots ---
+program
+  .command("hotspots [directory]")
+  .description(
+    "Find files that are frequently changed by many authors (bug magnets)",
+  )
+  .option("-n, --limit <number>", "Number of hotspots to show", "10")
+  .option("--since <date>", "Only consider commits since this date")
+  .action(async (directory: string | undefined, opts: { limit: string; since?: string }) => {
+    await requireGitRepo();
+    await hotspots(directory ?? ".", {
+      limit: parseInt(opts.limit, 10),
+      since: opts.since,
+    });
+  });
+
+// --- review ---
+program
+  .command("review <commit-range>")
+  .description(
+    "Summarize what changed in a commit range: areas, authors, blast radius",
+  )
+  .option("-n, --limit <number>", "Number of items to show per section", "10")
+  .action(async (commitRange: string, opts: { limit: string }) => {
+    await requireGitRepo();
+    await review(commitRange, {
+      limit: parseInt(opts.limit, 10),
+    });
+  });
+
+// --- journey ---
+program
+  .command("journey <file>")
+  .description(
+    "Tell the story of a file: creation, milestones, ownership changes",
+  )
+  .option("--from <date>", "Start the journey from this date")
+  .option("-n, --limit <number>", "Max milestones to show", "15")
+  .action(async (file: string, opts: { from?: string; limit: string }) => {
+    await requireGitRepo();
+    await journey(file, {
+      from: opts.from,
+      limit: parseInt(opts.limit, 10),
     });
   });
 

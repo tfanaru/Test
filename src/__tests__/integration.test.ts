@@ -220,6 +220,138 @@ describe("pathfinder bridge", () => {
   });
 });
 
+describe("pathfinder drift", () => {
+  it("shows drift analysis for a directory", () => {
+    const output = runPathfinder("drift", "src");
+    expect(output).toContain("Pathfinder");
+    expect(output).toContain("drift analysis");
+    expect(output).toContain("Summary");
+    expect(output).toContain("Total commits");
+  });
+
+  it("shows activity over time", () => {
+    const output = runPathfinder("drift", "src");
+    expect(output).toContain("Activity Over Time");
+    expect(output).toContain("commits");
+  });
+
+  it("shows trend analysis", () => {
+    const output = runPathfinder("drift", "src");
+    expect(output).toContain("Trend");
+  });
+
+  it("shows churn rate", () => {
+    const output = runPathfinder("drift", "src");
+    expect(output).toContain("Churn rate");
+  });
+
+  it("works for a specific file", () => {
+    const output = runPathfinder("drift", "src/utils/logger.ts");
+    expect(output).toContain("drift analysis");
+    expect(output).toContain("logger.ts");
+  });
+});
+
+describe("pathfinder hotspots", () => {
+  it("shows hotspots for a directory", () => {
+    const output = runPathfinder("hotspots", "src");
+    expect(output).toContain("Pathfinder");
+    expect(output).toContain("hotspots");
+    expect(output).toContain("Hotspot Ranking");
+  });
+
+  it("shows risk levels", () => {
+    const output = runPathfinder("hotspots", "src");
+    expect(output).toContain("commits");
+    expect(output).toContain("author");
+  });
+
+  it("shows summary stats", () => {
+    const output = runPathfinder("hotspots", "src");
+    expect(output).toContain("Summary");
+    expect(output).toContain("Files analyzed");
+  });
+
+  it("respects --limit flag", () => {
+    const output = runPathfinder("hotspots", "src", "--limit", "1");
+    expect(output).toContain("Hotspot Ranking");
+  });
+
+  it("works with default directory", () => {
+    const output = runPathfinder("hotspots");
+    expect(output).toContain("hotspots");
+  });
+});
+
+describe("pathfinder review", () => {
+  it("reviews a commit range", () => {
+    const output = runPathfinder("review", "HEAD~2..HEAD");
+    expect(output).toContain("Pathfinder");
+    expect(output).toContain("reviewing");
+    expect(output).toContain("Overview");
+    expect(output).toContain("Commits");
+  });
+
+  it("shows files changed", () => {
+    const output = runPathfinder("review", "HEAD~2..HEAD");
+    expect(output).toContain("Files changed");
+    expect(output).toContain("Lines changed");
+  });
+
+  it("shows areas affected", () => {
+    const output = runPathfinder("review", "HEAD~2..HEAD");
+    expect(output).toContain("Areas Affected");
+  });
+
+  it("shows contributors", () => {
+    const output = runPathfinder("review", "HEAD~2..HEAD");
+    expect(output).toContain("Contributors");
+  });
+
+  it("shows blast radius", () => {
+    const output = runPathfinder("review", "HEAD~2..HEAD");
+    expect(output).toContain("Blast Radius");
+  });
+
+  it("handles invalid commit range", () => {
+    const output = runPathfinder("review", "nonexistent..alsonotreal");
+    expect(output).toContain("Invalid commit range");
+  });
+});
+
+describe("pathfinder journey", () => {
+  it("shows journey of a file", () => {
+    const output = runPathfinder("journey", "src/core/engine.ts");
+    expect(output).toContain("Pathfinder");
+    expect(output).toContain("journey");
+    expect(output).toContain("Origin");
+  });
+
+  it("shows ownership timeline", () => {
+    const output = runPathfinder("journey", "src/core/engine.ts");
+    expect(output).toContain("Ownership Timeline");
+    expect(output).toContain("Alice Dev");
+  });
+
+  it("shows milestones", () => {
+    const output = runPathfinder("journey", "src/core/engine.ts");
+    expect(output).toContain("Milestones");
+    expect(output).toContain("Created");
+  });
+
+  it("shows current state", () => {
+    const output = runPathfinder("journey", "src/core/engine.ts");
+    expect(output).toContain("Current State");
+    expect(output).toContain("Last modified");
+  });
+
+  it("works for a directory", () => {
+    const output = runPathfinder("journey", "src/utils");
+    expect(output).toContain("journey");
+    expect(output).toContain("Origin");
+  });
+});
+
 describe("pathfinder --help", () => {
   it("shows help text", () => {
     const output = runPathfinder("--help");
@@ -228,6 +360,10 @@ describe("pathfinder --help", () => {
     expect(output).toContain("who");
     expect(output).toContain("trace");
     expect(output).toContain("bridge");
+    expect(output).toContain("drift");
+    expect(output).toContain("hotspots");
+    expect(output).toContain("review");
+    expect(output).toContain("journey");
   });
 });
 
